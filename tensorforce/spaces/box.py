@@ -7,7 +7,7 @@ class DiscreteBox(Space):
     """
     A box in R^n where each point is discrete
     """
-    def __init__(self, low=None, high=None, shape=None, dtype=int):
+    def __init__(self, low, high, shape=None):
         """
         Initializes in two ways
 
@@ -25,8 +25,6 @@ class DiscreteBox(Space):
                 the upper bound values in the box
             shape (tuple of int):
                 the shape (used when low, high are ints)
-            dtype (type):
-                used only for base class, not to be changed
 
         Example Usage
         -------------
@@ -44,12 +42,7 @@ class DiscreteBox(Space):
             ValueError('low and high should not be nones') if low and high are
                 not Nones
         """
-        if dtype is not int:
-            raise ValueError('dtype should be int')
-
-        if low is None or high is None:
-            raise ValueError('low and high should not be nones')
-
+        dtype = int
         if np.isscalar(low) and np.isscalar(high):
             if low > high:
                 raise ValueError('low should be less than high')
@@ -91,8 +84,61 @@ class DiscreteBox(Space):
         return higher and lower
 
     @property
-    def discrete(self):
+    def continuous(self):
         """
         Returns the bool of whether the space is discrete
         """
-        return True
+        return False
+
+class ContinuousBox(Space):
+    """
+    A continuous box in R^n
+    """
+    def __init__(self, low, high, shape=None):
+        dtype = float
+        if np.isscalar(low) and np.isscalar(high):
+            if low > high:
+                raise ValueError('low should be less than high')
+            self.low = int(low) * np.ones(shape)
+            self.high = int(high) * np.ones(shape)
+        else:
+            if low.shape != high.shape:
+                raise ValueError('low should be the same shape as high')
+            diff = low <= high
+            if not np.any(diff):
+                raise ValueError('low should be less than high')
+            self.low = low
+            self.high = high
+        if shape is None:
+            tensorforce.spaces.Space.__init__(low.shape, dtype)
+        else:
+            tensorforce.spaces.Space.__init__(shape, dtype)
+
+    def sample(self):
+        """
+        Randomly samples from the space. In this case an integer
+        np array of same shape as self.low and self.high
+        """
+        difference = self.high - self.low
+        sample_ = (np.random.uniform(size=self.high.shape) * difference).astype(np.int64)
+        return self.low + sample_
+
+    def contains(self, point):
+        """
+        Returns the bool value of {@ param point} being contained in the action space
+
+        Params
+        ------
+            point (np.ndarray that is np.int64):
+                a point that has the same shape and dtype as this space.
+        """
+        higher = np.all(point >= self.low)
+        lower = np.all(point <= self.high)
+        return higher and lower
+
+    @property
+    def continuous(self):
+        """
+        Returns the bool of whether the space is discrete
+        """
+        return False

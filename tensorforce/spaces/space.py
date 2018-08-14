@@ -26,8 +26,8 @@ class Space(object):
         raise NotImplementedError
 
     @property
-    def discrete(self):
+    def continuous(self):
         """
-        Returns the bool of whether the space is discrete
+        Returns the bool of whether the space is continuous
         """
         raise NotImplementedError
