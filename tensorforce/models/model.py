@@ -251,7 +251,7 @@ class Model(object):
                     self.summarizer = tf.contrib.summary.create_file_writer(
                         logdir=self.summarizer_spec['directory'],
                         max_queue=None,
-                        flush_millis=self.summarizer_spec.get('flush', 60000),
+                        flush_millis=(self.summarizer_spec.get('flush', 10) * 1000),
                         filename_suffix=None,
                         name=None
                     )
@@ -385,8 +385,6 @@ class Model(object):
                         worker_device=self.device,
                         cluster=self.distributed_spec["cluster_spec"]
                     )
-                    # Tag all tensors as 'ps' without task idx so they are shared between all workers.
-                    self.scope += '-ps'
             else:
                 raise TensorForceError("Unsupported job type: {}!".format(self.distributed_spec["job"]))
         else:
@@ -603,7 +601,7 @@ class Model(object):
             global_variables = self.get_variables(include_submodules=True, include_nontrainable=True)
             # global_variables += [self.global_episode, self.global_timestep]
             init_op = tf.variables_initializer(var_list=global_variables)
-            if self.summarizer_spec is None:
+            if self.graph_summary is None:
                 ready_op = tf.report_uninitialized_variables(var_list=global_variables)
                 ready_for_local_init_op = None
                 local_init_op = None
@@ -659,8 +657,11 @@ class Model(object):
                 elif not os.path.isfile(file):
                     file = os.path.join(directory, file)
                 if file is not None:
-                    scaffold.saver.restore(sess=session, save_path=file)
-                    session.run(self.buffer_index_reset_op)
+                    try:
+                        scaffold.saver.restore(sess=session, save_path=file)
+                        session.run(fetches=self.buffer_index_reset_op)
+                    except tf.errors.NotFoundError:
+                        raise TensorForceError("Error: Existing checkpoint could not be loaded! Set \"load\" to false in saver_spec.")
 
         # TensorFlow scaffold object
         # TODO explain what it does.
@@ -1252,6 +1253,9 @@ class Model(object):
             fetch = self.states_preprocessing[name].reset()
             if fetch is not None:
                 fetches.extend(fetch)
+
+        if self.flush_summarizer is not None:
+            fetches.append(self.flush_summarizer)
 
         # Get the updated episode and timestep counts.
         fetch_list = self.monitored_session.run(fetches=fetches)
