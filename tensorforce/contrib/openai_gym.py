@@ -22,9 +22,11 @@ from __future__ import print_function
 from __future__ import division
 
 import gym
+import gym.wrappers
 import numpy as np
 from tensorforce import TensorForceError
 from tensorforce.environments import Environment
+
 
 class OpenAIGym(Environment):
     """
@@ -94,7 +96,7 @@ class OpenAIGym(Environment):
         elif isinstance(space, gym.spaces.MultiBinary):
             return dict(shape=space.n, type='int')
         elif isinstance(space, gym.spaces.MultiDiscrete):
-            return dict(shape=space.num_discrete_space, type='int')
+            return dict(shape=len(space.nvec), type='int')
         elif isinstance(space, gym.spaces.Box):
             return dict(shape=tuple(space.shape), type='float')
         elif isinstance(space, gym.spaces.Tuple):

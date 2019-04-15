@@ -13,9 +13,29 @@
 # limitations under the License.
 # ==============================================================================
 
-from tensorforce.execution.base_runner import BaseRunner
-from tensorforce.execution.runner import Runner, SingleRunner, DistributedTFRunner
-from tensorforce.execution.threaded_runner import ThreadedRunner, WorkerAgentGenerator
-from tensorforce.execution.parallel_runner import ParallelRunner
+from __future__ import absolute_import
+from __future__ import print_function
+from __future__ import division
 
-__all__ = ['BaseRunner', 'SingleRunner', 'DistributedTFRunner', 'Runner', 'ThreadedRunner', 'WorkerAgentGenerator', 'ParallelRunner']
+import unittest
+
+from tensorforce.tests.base_agent_test import BaseAgentTest
+from tensorforce.agents import ACKTRAgent
+
+
+class TestACKTRAgent(BaseAgentTest, unittest.TestCase):
+
+    agent = ACKTRAgent
+    config = dict(
+        update_mode=dict(
+            unit='episodes',
+            batch_size=4,
+            frequency=4
+        ),
+        memory=dict(
+            type='latest',
+            include_next_states=False,
+            capacity=100
+        ),
+        learning_rate=1e-2
+    )

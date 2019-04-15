@@ -1,20 +1,10 @@
-# Copyright 2017 reinforce.io. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
-
 """
-OpenAI gym execution.
+Deepmind Pycolab usage example
+
+For setting up Pycolab see https://github.com/deepmind/pycolab
+For Pycolab game definition example check: examples/extraterrestrial_maurauders.py
+Each game definition should have a make_game() function that returns Pycolab Game Engine object
+and a get_ui() function that returns Pycolab UI object.
 """
 
 from __future__ import absolute_import
@@ -32,37 +22,25 @@ import sys
 from tensorforce import TensorForceError
 from tensorforce.agents import Agent
 from tensorforce.execution import Runner
-from tensorforce.contrib.openai_gym import OpenAIGym
+from tensorforce.contrib.dm_pycolab import DMPycolab
 
-
-# python examples/openai_gym.py Pong-ram-v0 -a examples/configs/vpg.json -n examples/configs/mlp2_network.json -e 50000 -m 2000
-
-# python examples/openai_gym.py CartPole-v0 -a examples/configs/vpg.json -n examples/configs/mlp2_network.json -e 2000 -m 200
-
+# python examples/dm_pycolab.py examples/extraterrestrial_maurauders.py -a examples/configs/dqn.json -n examples/configs/mlp2_embedding_flatten_network.json -e 5000 -m 300
 
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('gym_id', help="Id of the Gym environment")
+    parser.add_argument('path',  help="Path to Pycolab game definition file")
     parser.add_argument('-i', '--import-modules', help="Import module(s) required for environment")
     parser.add_argument('-a', '--agent', help="Agent configuration file")
     parser.add_argument('-n', '--network', default=None, help="Network specification file")
     parser.add_argument('-e', '--episodes', type=int, default=None, help="Number of episodes")
     parser.add_argument('-t', '--timesteps', type=int, default=None, help="Number of timesteps")
     parser.add_argument('-m', '--max-episode-timesteps', type=int, default=None, help="Maximum number of timesteps per episode")
-    parser.add_argument('-d', '--deterministic', action='store_true', default=False, help="Choose actions deterministically")
     parser.add_argument('-s', '--save', help="Save agent to this dir")
     parser.add_argument('-se', '--save-episodes', type=int, default=100, help="Save agent every x episodes")
     parser.add_argument('-l', '--load', help="Load agent from this dir")
-    parser.add_argument('--monitor', help="Save results to this directory")
-    parser.add_argument('--monitor-safe', action='store_true', default=False, help="Do not overwrite previous results")
-    parser.add_argument('--monitor-video', type=int, default=0, help="Save video every x steps (0 = disabled)")
-    parser.add_argument('--visualize', action='store_true', default=False, help="Enable OpenAI Gym's visualization")
+    parser.add_argument('--visualize', action='store_true', default=False, help="Enable Pycolab game's visualization")
     parser.add_argument('-D', '--debug', action='store_true', default=False, help="Show debug outputs")
-    parser.add_argument('-te', '--test', action='store_true', default=False, help="Test agent without learning.")
-    parser.add_argument('-sl', '--sleep', type=float, default=None, help="Slow down simulation by sleeping for x seconds (fractions allowed).")
-    parser.add_argument('--job', type=str, default=None, help="For distributed mode: The job type of this agent.")
-    parser.add_argument('--task', type=int, default=0, help="For distributed mode: The task index of this agent.")
 
     args = parser.parse_args()
 
@@ -75,11 +53,18 @@ def main():
         for module in args.import_modules.split(','):
             importlib.import_module(name=module)
 
-    environment = OpenAIGym(
-        gym_id=args.gym_id,
-        monitor=args.monitor,
-        monitor_safe=args.monitor_safe,
-        monitor_video=args.monitor_video,
+    if args.path is not None:
+        sys.path.append(os.path.dirname(os.path.expanduser(args.path)))
+        game_name = os.path.splitext(os.path.basename(args.path))[0]
+
+        try:
+	    game_env = importlib.import_module(game_name)
+        except:
+            raise TensorForceError("Could not get game {0} from path {1}".format(game_name, args.path))
+
+    environment = DMPycolab(
+        game=game_env.make_game(),
+        ui=game_env.get_ui(),
         visualize=args.visualize
     )
 
@@ -92,23 +77,18 @@ def main():
     if args.network is not None:
         with open(args.network, 'r') as fp:
             network = json.load(fp=fp)
-        agent = Agent.from_spec(
-            spec=agent,
-            kwargs=dict(
-                states=environment.states,
-                actions=environment.actions,
-                network=network
-            )
-        )
     else:
+        network = None
         logger.info("No network configuration provided.")
-        agent = Agent.from_spec(
-            spec=agent,
-            kwargs=dict(
-                states=environment.states,
-                actions=environment.actions
-            )
+
+    agent = Agent.from_spec(
+        spec=agent,
+        kwargs=dict(
+            states=environment.states,
+            actions=environment.actions,
+            network=network,
         )
+    )
 
     if args.load:
         load_dir = os.path.dirname(args.load)
@@ -163,15 +143,11 @@ def main():
         num_timesteps=args.timesteps,
         num_episodes=args.episodes,
         max_episode_timesteps=args.max_episode_timesteps,
-        deterministic=args.deterministic,
         episode_finished=episode_finished,
-        testing=args.test,
-        sleep=args.sleep
     )
     runner.close()
 
     logger.info("Learning finished. Total episodes: {ep}".format(ep=runner.agent.episode))
-
 
 if __name__ == '__main__':
     main()

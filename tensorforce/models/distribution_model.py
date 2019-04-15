@@ -143,6 +143,7 @@ class DistributionModel(MemoryModel):
 
             if self.distributions_spec is not None and name in self.distributions_spec:
                 kwargs = dict(action)
+                kwargs['scope'] = name
                 kwargs['summary_labels'] = self.summary_labels
                 distributions[name] = Distribution.from_spec(
                     spec=self.distributions_spec[name],
@@ -152,6 +153,7 @@ class DistributionModel(MemoryModel):
             elif action['type'] == 'bool':
                 distributions[name] = Bernoulli(
                     shape=action['shape'],
+                    scope=name,
                     summary_labels=self.summary_labels
                 )
 
@@ -159,6 +161,7 @@ class DistributionModel(MemoryModel):
                 distributions[name] = Categorical(
                     shape=action['shape'],
                     num_actions=action['num_actions'],
+                    scope=name,
                     summary_labels=self.summary_labels
                 )
 
@@ -168,12 +171,14 @@ class DistributionModel(MemoryModel):
                         shape=action['shape'],
                         min_value=action['min_value'],
                         max_value=action['max_value'],
+                        scope=name,
                         summary_labels=self.summary_labels
                     )
 
                 else:
                     distributions[name] = Gaussian(
                         shape=action['shape'],
+                        scope=name,
                         summary_labels=self.summary_labels
                     )
 
@@ -226,7 +231,8 @@ class DistributionModel(MemoryModel):
                 else:
                     losses['distributions'] = regularization_loss
 
-        if self.entropy_regularization is not None and self.entropy_regularization > 0.0:
+        if (self.entropy_regularization is not None and self.entropy_regularization > 0.0) \
+                or 'entropy' in self.summary_labels:
             entropies = list()
             embedding = self.network.apply(x=states, internals=internals, update=update)
             for name in sorted(self.distributions):
@@ -236,11 +242,12 @@ class DistributionModel(MemoryModel):
                 collapsed_size = util.prod(util.shape(entropy)[1:])
                 entropy = tf.reshape(tensor=entropy, shape=(-1, collapsed_size))
                 entropies.append(entropy)
-
             entropy_per_instance = tf.reduce_mean(input_tensor=tf.concat(values=entropies, axis=1), axis=1)
             entropy = tf.reduce_mean(input_tensor=entropy_per_instance, axis=0)
-            if 'entropy' in self.summary_labels:
-                tf.contrib.summary.scalar(name='entropy', tensor=entropy)
+
+        if 'entropy' in self.summary_labels:
+            tf.contrib.summary.scalar(name='entropy', tensor=entropy)
+        if self.entropy_regularization is not None and self.entropy_regularization > 0.0:
             losses['entropy'] = -self.entropy_regularization * entropy
 
         return losses

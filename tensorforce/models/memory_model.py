@@ -318,7 +318,7 @@ class MemoryModel(Model):
 
     def tf_reference(self, states, internals, actions, terminal, reward, next_states, next_internals, update):
         """
-        Creates the TensorFlow operations for obtaining the reference tensor(s), in case of a  
+        Creates the TensorFlow operations for obtaining the reference tensor(s), in case of a
         comparative loss.
 
         Args:
@@ -520,7 +520,6 @@ class MemoryModel(Model):
                         y=tf.greater_equal(x=self.timestep, y=first_update)
                     )
                 )
-                batch = self.memory.retrieve_timesteps(n=batch_size)
 
             elif unit == 'episodes':
                 # Episode-based batch
@@ -535,7 +534,6 @@ class MemoryModel(Model):
                         )
                     )
                 )
-                batch = self.memory.retrieve_episodes(n=batch_size)
 
             elif unit == 'sequences':
                 # Timestep-sequence-based batch
@@ -547,18 +545,27 @@ class MemoryModel(Model):
                         y=tf.greater_equal(x=self.timestep, y=first_update)
                     )
                 )
-                batch = self.memory.retrieve_sequences(n=batch_size, sequence_length=sequence_length)
 
             else:
                 raise TensorForceError("Invalid update unit: {}.".format(unit))
 
-            # Do not calculate gradients for memory-internal operations.
-            batch = util.map_tensors(
-                fn=(lambda tensor: tf.stop_gradient(input=tensor)),
-                tensors=batch
-            )
-
             def true_fn():
+                if unit == 'timesteps':
+                    # Timestep-based batch
+                    batch = self.memory.retrieve_timesteps(n=batch_size)
+                elif unit == 'episodes':
+                    # Episode-based batch
+                    batch = self.memory.retrieve_episodes(n=batch_size)
+                elif unit == 'sequences':
+                    # Timestep-sequence-based batch
+                    batch = self.memory.retrieve_sequences(n=batch_size, sequence_length=sequence_length)
+
+                # Do not calculate gradients for memory-internal operations.
+                batch = util.map_tensors(
+                    fn=(lambda tensor: tf.stop_gradient(input=tensor)),
+                    tensors=batch
+                )
+
                 optimize = self.fn_optimization(**batch)
                 with tf.control_dependencies(control_inputs=(optimize,)):
                     return tf.logical_and(x=True, y=True)
@@ -585,7 +592,7 @@ class MemoryModel(Model):
             reward=reward
         )
 
-    def create_operations(self, states, internals, actions, terminal, reward, deterministic, independent):
+    def create_operations(self, states, internals, actions, terminal, reward, deterministic, independent, index):
         # Import experience operation.
         self.import_experience_output = self.fn_import_experience(
             states=states,
@@ -602,7 +609,8 @@ class MemoryModel(Model):
             terminal=terminal,
             reward=reward,
             deterministic=deterministic,
-            independent=independent
+            independent=independent,
+            index=index
         )
 
     def get_variables(self, include_submodules=False, include_nontrainable=False):
